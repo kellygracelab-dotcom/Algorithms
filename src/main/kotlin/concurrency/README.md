@@ -1,11 +1,11 @@
-# Корутины и гонки
+# Coroutines and races
 
-Пять тем, по одной за подход. Порядок важен: каждая следующая опирается на предыдущую.
+Five topics, one approach each. Order matters: each one builds on the previous.
 
-Правило работы: **сначала прочитай вопрос и ответь вслух, потом запусти тест и смотри код.**
-Тест — это проверка, а не объяснение.
+Ground rule: **read the question and answer it out loud first, then run the test and look at the code.**
+The test is a check, not an explanation.
 
-Запуск всего набора:
+Run the whole set:
 
 ```bash
 ./gradlew test --tests "concurrency.*"
@@ -13,89 +13,90 @@
 
 ---
 
-## 1. Гонка за общим состоянием — `RaceCounter.kt`
+## 1. A race over shared state — `RaceCounter.kt`
 
-**Вопрос.** Восемь корутин увеличивают один счётчик по двадцать тысяч раз. Почему в конце
-там не сто шестьдесят тысяч, если ни одна корутина ничего не теряла?
+**Question.** Eight coroutines each increment a shared counter twenty thousand times. Why isn't
+the final result a hundred and sixty thousand, if no coroutine ever lost an increment?
 
-Тест печатает настоящее число — посмотри, насколько промахнулось.
+The test prints the real number — see how far off it lands.
 
-**Что понять.** `value = value + 1` это не одна операция, а три: прочитать, прибавить,
-записать. Между чтением и записью успевает влезть другой поток, и его прибавление
-затирается.
+**What to get.** `value = value + 1` isn't one operation, it's three: read, add, write.
+Another thread can slip in between the read and the write, and its own addition gets
+overwritten.
 
-**Три способа починить, и когда какой:**
+**Three ways to fix it, and when to use which:**
 
-- **атомарный тип** — когда состояние простое, одно число или ссылка;
-- **Mutex** — когда надо защитить несколько связанных полей разом;
-- **замкнуть в один поток** — когда состояние вообще не должно быть общим.
+- **an atomic type** — when the state is simple, a single number or reference;
+- **Mutex** — when several related fields need to be protected together;
+- **confine it to one thread** — when the state shouldn't be shared at all.
 
-**На собеседовании спросят:** чем `Mutex` отличается от `synchronized`. Коротко: `Mutex`
-приостанавливает корутину, `synchronized` блокирует поток. Второе в корутинах — потеря
-всего смысла.
-
----
-
-## 2. Структурированная конкурентность — `StructuredConcurrency.kt`
-
-**Вопрос.** Что произойдёт с соседними корутинами, если одна из них упадёт?
-
-**Что понять.** Область не просто «где живут корутины», а **гарантия**: она не завершится,
-пока не завершатся все дети. Отсюда два следствия — родитель ждёт детей, и падение одного
-ребёнка отменяет остальных.
-
-`supervisorScope` меняет второе правило: дети становятся независимыми, падение одного
-не трогает соседей. Но исключение всё равно кто-то должен обработать, иначе оно улетит
-наверх — в тесте это видно по обработчику.
-
-**Отдельно про `async`:** два `async` подряд запускают работу **одновременно**, а два
-прямых вызова — последовательно. Тест печатает обе длительности, разница видна.
+**On an interview they'll ask:** how `Mutex` differs from `synchronized`. Short version: `Mutex`
+suspends the coroutine, `synchronized` blocks the thread. The second one, inside a coroutine,
+defeats the whole point.
 
 ---
 
-## 3. Отмена — `Cancellation.kt`
+## 2. Structured concurrency — `StructuredConcurrency.kt`
 
-Самая частая тема на собеседовании и самая частая ошибка в коде.
+**Question.** What happens to sibling coroutines if one of them crashes?
 
-**Вопрос.** Что не так с `try { ... } catch (e: Exception) { log(e) }` внутри корутины?
+**What to get.** A scope isn't just "where coroutines live" — it's a **guarantee**: it won't
+complete until all its children have. Two consequences follow — the parent waits for its
+children, and one child failing cancels the rest.
 
-**Что понять.** Отмена в корутинах — это исключение. Поймав «все исключения», ты ловишь и
-отмену тоже, и корутина продолжает жить, когда её уже попросили умереть. Отмену надо
-пробрасывать дальше.
+`supervisorScope` changes the second rule: children become independent, one failing doesn't
+touch its siblings. But someone still has to handle the exception, or it flies upward —
+the test shows this through the handler.
 
-**Второе.** Отмена работает только в точках приостановки. Цикл, который просто считает и
-никуда не заходит, отменить нечем — он досчитает до конца. Лечится проверкой
-`ensureActive()` внутри цикла. В тестах это две соседние функции, отличаются одной строкой.
-
-**Третье.** Код очистки в `finally` после отмены не выполнится, если он сам приостанавливается —
-корутина уже отменена. Для этого есть `NonCancellable`.
+**Separately, about `async`:** two `async` calls in a row run the work **concurrently**, while
+two direct calls run sequentially. The test prints both durations, and the difference is visible.
 
 ---
 
-## 4. Диспетчеры и блокировка — `DispatchersAndBlocking.kt`
+## 3. Cancellation — `Cancellation.kt`
 
-**Вопрос.** `suspend` означает «выполнится в фоне»?
+The most common interview topic, and the most common bug in real code.
 
-**Что понять.** Нет. `suspend` означает «эта функция умеет приостанавливаться». На каком
-потоке она выполнится — решает диспетчер, а не ключевое слово.
+**Question.** What's wrong with `try { ... } catch (e: Exception) { log(e) }` inside a coroutine?
 
-**Главное различие:** приостановка освобождает поток, блокировка — занимает. Тест
-показывает это на числах: сто приостанавливающихся задач укладываются в время одной,
-сто блокирующих — упираются в число потоков.
+**What to get.** Cancellation in coroutines is an exception. Catch "all exceptions" and you
+catch cancellation too — the coroutine keeps running after it was asked to die. Cancellation
+has to be rethrown.
+
+**Second.** Cancellation only works at suspension points. A loop that just counts and never
+suspends has nothing to cancel it at — it'll run to completion. Fixed by checking
+`ensureActive()` inside the loop. In the tests these are two neighboring functions, one line
+apart.
+
+**Third.** Cleanup code in `finally` won't run after cancellation if it suspends itself — the
+coroutine is already cancelled. That's what `NonCancellable` is for.
 
 ---
 
-## 5. Холодные и горячие потоки — `ColdAndHot.kt`
+## 4. Dispatchers and blocking — `DispatchersAndBlocking.kt`
 
-**Вопрос.** Два подписчика на один `Flow` получат одни и те же данные или каждый свои?
+**Question.** Does `suspend` mean "will run in the background"?
 
-**Что понять.** Холодный `Flow` — это рецепт: он запускается заново для каждого
-подписчика. Тест это считает — счётчик стартов равен числу сборов.
+**What to get.** No. `suspend` means "this function knows how to suspend". Which thread it
+actually runs on is decided by the dispatcher, not the keyword.
 
-Горячий (`StateFlow`, `SharedFlow`) существует независимо от подписчиков. У `StateFlow`
-всегда есть текущее значение, и он **не хранит историю**: три быстрых изменения подряд
-дадут подписчику только последнее.
+**The key difference:** suspension frees up the thread, blocking occupies it. The test shows
+this in numbers: a hundred suspending tasks finish in about the time of one, a hundred
+blocking tasks are capped by the number of threads.
 
-**На собеседовании спросят:** почему `StateFlow` для состояния экрана, а `SharedFlow` для
-событий. Потому что состояние имеет «текущее значение» и переживает поворот экрана, а
-событие показывается один раз и повторяться при пересоздании не должно.
+---
+
+## 5. Cold and hot flows — `ColdAndHot.kt`
+
+**Question.** Two subscribers on the same `Flow` — do they get the same data, or each their own?
+
+**What to get.** A cold `Flow` is a recipe: it starts over for every subscriber. The test
+counts this — the start counter equals the number of collections.
+
+A hot one (`StateFlow`, `SharedFlow`) exists independently of its subscribers. `StateFlow`
+always has a current value, and it **doesn't keep history**: three quick changes in a row leave
+a subscriber with only the last one.
+
+**On an interview they'll ask:** why `StateFlow` for screen state and `SharedFlow` for events.
+Because state has a "current value" and survives a screen rotation, while an event is shown
+once and shouldn't repeat on recreation.

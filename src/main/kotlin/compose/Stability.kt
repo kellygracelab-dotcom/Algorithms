@@ -1,17 +1,17 @@
 package compose
 
 /**
- * Модель того, как Compose решает, можно ли пропустить перезапуск composable-функции.
+ * A model of how Compose decides whether a composable's recomposition can be skipped.
  *
- * Правило Compose: пропустить можно, если параметр СТАБИЛЕН и значение не изменилось.
- * Стабилен — значит Compose может доверять equals: тип либо неизменяемый,
- * либо изменяемый, но сам сообщает об изменениях (как MutableState).
+ * Compose's rule: skipping is allowed only if the parameter is STABLE and the value
+ * hasn't changed. Stable means Compose can trust equals: the type is either immutable,
+ * or mutable but reports its own changes (like MutableState).
  *
- * List<T> нестабилен: под интерфейсом может лежать MutableList,
- * измениться он может, а сказать об этом — нет.
+ * List<T> is unstable: a MutableList might be hiding behind the interface —
+ * it can change, but it has no way to say so.
  */
 
-/** Обёртка-обещание: «этот список больше не изменится». Аналог ImmutableList. */
+/** A promise-wrapper: "this list won't change anymore". Analogous to ImmutableList. */
 class Immutable<T>(private val items: List<T>) {
 
     override fun equals(other: Any?): Boolean {
@@ -26,14 +26,14 @@ class Immutable<T>(private val items: List<T>) {
     }
 }
 
-/** true, если тип считается стабильным — то есть его equals можно доверять. */
+/** true if the type is considered stable — meaning its equals can be trusted. */
 private fun isStable(value: Any?): Boolean {
     return value == null || value is Int || value is String || value is Boolean || value is Immutable<*>
 }
 /**
- * Пропустить перезапуск можно, если оба значения стабильны и равны.
+ * Skipping is allowed only if both values are stable and equal.
  *
- * @return true — параметр не изменился, перезапуск не нужен.
+ * @return true — the parameter hasn't changed, no recomposition needed.
  */
 fun <T> shouldSkip(old: T, new: T): Boolean {
     if (!isStable(old) || !isStable(new)) {

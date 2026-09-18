@@ -1,18 +1,18 @@
 package nullsafety
 
 /**
- * token — var, не val: сессию можно разлогинить или перевыпустить на лету.
- * Это ровно тот сценарий из-за которого компилятор Kotlin отказывается
- * делать smart cast на var-свойстве класса — другой поток мог его поменять.
+ * token is var, not val: a session can be logged out or reissued on the fly.
+ * This is exactly the scenario the Kotlin compiler refuses to smart-cast a
+ * var class property for — another thread could have changed it.
  */
 class Session(var token: String?, val userId: String)
 
 /**
- * Приветствие для экрана. Никогда не должно падать — гостю показываем то, что есть.
+ * A greeting for the screen. Must never crash — a guest still sees something.
  *
- * TODO: без `!!`. Скопируй session.token в локальную val, дальше safe call и элвис.
- *  Нет токена -> "Hello, guest".
- *  Есть токен -> "Hello, ${userId} (••••${последние 4 символа токена})".
+ * TODO: no `!!`. Copy session.token into a local val, then safe call and elvis.
+ *  No token -> "Hello, guest".
+ *  Has a token -> "Hello, ${userId} (••••${last 4 characters of the token})".
  */
 fun greeting(session: Session): String {
     val local = session.token
@@ -24,11 +24,11 @@ fun greeting(session: Session): String {
 }
 
 /**
- * Для операций, которым токен обязателен (например, запрос к серверу).
+ * For operations that require a token (a request to the server, say).
  *
- * TODO: нет токена -> брось IllegalStateException("Session $userId has no token").
- *  Есть токен -> верни его. session.token — var, поэтому `if (session.token != null)`
- *  не даст smart cast; сначала сохрани в локальную val.
+ * TODO: no token -> throw IllegalStateException("Session $userId has no token").
+ *  Has a token -> return it. session.token is var, so `if (session.token != null)`
+ *  won't smart-cast; save it into a local val first.
  */
 fun requireToken(session: Session): String {
     val local = session.token

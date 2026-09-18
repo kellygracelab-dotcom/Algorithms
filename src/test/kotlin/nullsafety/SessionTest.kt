@@ -14,7 +14,7 @@ class SessionTest {
 
     @Test
     fun `greeting shows userId and last four chars of the token`() {
-        // TODO: сессия с userId "u1" и token "abc123456", какая строка должна вернуться?
+        // TODO: a session with userId "u1" and token "abc123456" — what string should come back?
         val session = Session("abc123456", "u1")
 
         assertEquals("Hello, u1 (••••3456)", greeting(session))
